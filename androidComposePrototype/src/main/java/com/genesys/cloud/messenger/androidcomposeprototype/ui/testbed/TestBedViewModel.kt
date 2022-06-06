@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
 
 private const val ATTACHMENT_FILE_NAME = "test_asset.png"
 
-class TestBedViewModel : ViewModel(), CoroutineScope {
+open class TestBedViewModel : ViewModel(), CoroutineScope {
 
     override val coroutineContext = Dispatchers.IO + Job()
 
@@ -122,7 +122,7 @@ class TestBedViewModel : ViewModel(), CoroutineScope {
         }
     }
 
-    private suspend fun doConnect() {
+    public open suspend fun doConnect() {
         try {
             client.connect()
         } catch (t: Throwable) {
@@ -138,7 +138,7 @@ class TestBedViewModel : ViewModel(), CoroutineScope {
         }
     }
 
-    private suspend fun doConfigureSession() {
+    public suspend fun doConfigureSession() {
         try {
             client.configureSession()
         } catch (t: Throwable) {
