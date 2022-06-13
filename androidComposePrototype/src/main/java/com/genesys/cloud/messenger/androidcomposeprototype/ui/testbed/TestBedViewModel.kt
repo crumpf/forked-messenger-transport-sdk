@@ -7,13 +7,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.genesys.cloud.messenger.androidcomposeprototype.BuildConfig
+import com.genesys.cloud.messenger.transport.core.*
 import com.genesys.cloud.messenger.transport.core.Attachment.State.Detached
-import com.genesys.cloud.messenger.transport.core.Configuration
-import com.genesys.cloud.messenger.transport.core.MessageEvent
 import com.genesys.cloud.messenger.transport.core.MessageEvent.AttachmentUpdated
-import com.genesys.cloud.messenger.transport.core.MessagingClient
 import com.genesys.cloud.messenger.transport.core.MessagingClient.State
-import com.genesys.cloud.messenger.transport.core.MobileMessenger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +26,7 @@ class TestBedViewModel : ViewModel(), CoroutineScope {
 
     private val TAG = TestBedViewModel::class.simpleName
 
+    private lateinit var messengerTransport: MessengerTransport
     private lateinit var client: MessagingClient
     private lateinit var attachment: ByteArray
     private val attachedIds = mutableListOf<String>()
@@ -52,13 +50,15 @@ class TestBedViewModel : ViewModel(), CoroutineScope {
         val mmsdkConfiguration = Configuration(
             deploymentId = BuildConfig.DEPLOYMENT_ID,
             domain = BuildConfig.DEPLOYMENT_DOMAIN,
-            tokenStoreKey = "com.genesys.cloud.messenger",
             logging = true
         )
-        client = MobileMessenger.createMessagingClient(
-            context = context,
+        DefaultTokenStore.context = context
+        messengerTransport = MessengerTransport(
             configuration = mmsdkConfiguration,
+            "com.genesys.cloud.messenger"
         )
+
+        client = messengerTransport.createMessagingClient()
         with(client) {
             stateListener = { runBlocking { onClientState(it) } }
             messageListener = { onEvent(it) }
@@ -111,11 +111,7 @@ class TestBedViewModel : ViewModel(), CoroutineScope {
     private suspend fun doDeployment() {
         try {
             onSocketMessageReceived(
-                MobileMessenger.fetchDeploymentConfig(
-                    BuildConfig.DEPLOYMENT_DOMAIN,
-                    BuildConfig.DEPLOYMENT_ID,
-                    true,
-                ).toString()
+                messengerTransport.fetchDeploymentConfig().toString()
             )
         } catch (t: Throwable) {
             handleException(t, "fetch deployment config")

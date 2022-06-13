@@ -6,11 +6,14 @@ import com.genesys.cloud.messenger.transport.util.TOKEN_KEY
 import com.genesys.cloud.messenger.transport.util.TokenStore
 import java.util.UUID
 
-internal class TokenStoreImpl(context: Context, storeKey: String) : TokenStore {
-    private val sharedPreferences: SharedPreferences = context.getSharedPreferences(
-        storeKey,
-        Context.MODE_PRIVATE
-    )
+actual class DefaultTokenStore actual constructor(storeKey: String) : TokenStore {
+    private val sharedPreferences: SharedPreferences
+    init {
+        if (context == null) {
+            throw IllegalStateException("Must set DefaultTokenStore.context before instantiating")
+        }
+        sharedPreferences = context!!.getSharedPreferences(storeKey, Context.MODE_PRIVATE)
+    }
 
     override val token: String
         get() = sharedPreferences.getString(TOKEN_KEY, null) ?: UUID.randomUUID().toString().also {
@@ -22,5 +25,12 @@ internal class TokenStoreImpl(context: Context, storeKey: String) : TokenStore {
             putString(TOKEN_KEY, value)
             apply()
         }
+    }
+
+    companion object {
+        var context: Context? = null
+            set(value) {
+                field = value?.applicationContext
+            }
     }
 }

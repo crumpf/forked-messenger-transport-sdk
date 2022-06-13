@@ -2,6 +2,7 @@ package com.genesys.cloud.messenger.transport.network
 
 import com.genesys.cloud.messenger.transport.core.Configuration
 import com.genesys.cloud.messenger.transport.util.logs.Log
+import com.genesys.cloud.messenger.transport.util.logs.okHttpLogger
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response

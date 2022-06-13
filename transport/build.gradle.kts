@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
 plugins {
@@ -43,6 +42,7 @@ android {
 
 val iosFrameworkName = "MessengerTransport"
 version = project.rootProject.version
+group = project.rootProject.group
 
 kotlin {
     android {
@@ -51,24 +51,18 @@ kotlin {
                 jvmTarget = Deps.Android.jvmTarget
             }
         }
+        publishLibraryVariants("release", "debug")
+        publishLibraryVariantsGroupedByFlavor = true
     }
 
-    if (properties.containsKey("android.injected.invoked.from.ide")) {
-        // When running from Android Studio, the shared iOS source set needs this workaround for IDE features like code-completion/highlighting with 3rd party iOS libs
-        // https://kotlinlang.org/docs/kmm-add-dependencies.html#workaround-to-enable-ide-support-for-the-shared-ios-source-set
-        val iosTarget: (String, KotlinNativeTarget.() -> Unit) -> KotlinNativeTarget = when {
-            System.getenv("SDK_NAME")?.startsWith("iphoneos") == true -> ::iosArm64
-            System.getenv("NATIVE_ARCH")?.startsWith("arm") == true -> ::iosSimulatorArm64
-            else -> ::iosX64
-        }
-        iosTarget("ios") {}
-    } else {
-        val xcf = XCFramework(iosFrameworkName)
-        ios {
-            binaries.framework {
-                baseName = iosFrameworkName
-                xcf.add(this)
-            }
+    val xcf = XCFramework(iosFrameworkName)
+    listOf(
+        iosX64(),
+        iosArm64(),
+    ).forEach {
+        it.binaries.framework {
+            baseName = iosFrameworkName
+            xcf.add(this)
         }
     }
 
@@ -89,7 +83,7 @@ kotlin {
     }
 
     sourceSets {
-        commonMain {
+        val commonMain by getting {
             dependencies {
                 implementation(kotlin("stdlib-common"))
                 implementation(Deps.Libs.Kotlinx.serializationJson)
@@ -100,7 +94,7 @@ kotlin {
                 implementation(Deps.Libs.Ktor.json)
                 implementation(Deps.Libs.Ktor.logging)
                 implementation(Deps.Libs.logback)
-                api(Deps.Libs.kermit)
+                implementation(Deps.Libs.kermit)
             }
         }
         commonTest {
@@ -130,22 +124,24 @@ kotlin {
                 implementation(Deps.Libs.Kotlinx.coroutinesTest)
             }
         }
-        val iosMain by getting {
+
+        val iosMain = sourceSets.findByName("iosMain") ?: sourceSets.create("iosMain")
+        val iosX64Main by getting
+        val iosArm64Main by getting
+
+        with(iosMain) {
+            dependsOn(commonMain)
             dependencies {
                 implementation(Deps.Libs.Ktor.ios)
             }
+
+            iosX64Main.dependsOn(this)
+            iosArm64Main.dependsOn(this)
         }
-        val iosTest by getting
     }
 }
 
 tasks {
-    create<Jar>("kotlinSourcesJar") {
-        archiveClassifier.set("sources")
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-        from("./src/androidMain", "./src/commonMain")
-    }
-
     create<Jar>("fakeJavadocJar") {
         archiveClassifier.set("javadoc")
         from("./deployment")
@@ -166,17 +162,11 @@ tasks {
 
 publishing {
     publications {
-        create<MavenPublication>("maven") {
-            artifact(File("build/outputs/aar/transport-release.aar"))
-            artifact(tasks["kotlinSourcesJar"])
+        withType<MavenPublication> {
             artifact(tasks["fakeJavadocJar"])
-            groupId = rootProject.group as String?
-            artifactId = "messenger-transport-mobile-sdk"
-            version = version
-
             pom {
                 name.set("Genesys Cloud Mobile Messenger Transport SDK")
-                description.set("This library provides methods for connecting to Genesys Cloud Messenger chat APIs and WebSockets from Android native applications.")
+                description.set("This library provides methods for connecting to Genesys Cloud Messenger chat APIs and WebSockets from mobile applications.")
                 url.set("https://github.com/MyPureCloud/genesys-messenger-transport-mobile-sdk")
 
                 licenses {
@@ -196,28 +186,17 @@ publishing {
                 scm {
                     url.set("https://github.com/MyPureCloud/genesys-messenger-transport-mobile-sdk.git")
                 }
-
-                withXml {
-                    asNode().appendNode("dependencies").let { dependenciesNode ->
-                        listOf(
-                            "androidMainImplementation",
-                            "androidMainApi",
-                            "commonMainImplementation",
-                            "commonMainApi"
-                        ).forEach {
-                            for (dependency in configurations[it].dependencies) {
-                                if (dependency.name != "unspecified") {
-                                    dependenciesNode.appendNode("dependency").let { node ->
-                                        node.appendNode("groupId", dependency.group)
-                                        node.appendNode("artifactId", dependency.name)
-                                        node.appendNode("version", dependency.version)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
+        }
+    }
+}
+
+afterEvaluate {
+    configure<PublishingExtension> {
+        publications.all {
+            val mavenPublication = this as? MavenPublication
+            mavenPublication?.artifactId =
+                "messenger-transport-mobile-sdk${"-$name".takeUnless { "kotlinMultiplatform" in name }.orEmpty()}"
         }
     }
 }
@@ -225,9 +204,8 @@ publishing {
 signing {
     // Signing configuration is setup in the ~/.gradle/gradle.properties file on the Jenkins machine
     isRequired = true
-    sign(tasks["kotlinSourcesJar"])
-    sign(tasks["fakeJavadocJar"])
-    sign(publishing.publications["maven"])
+
+    sign(publishing.publications)
 }
 
 apply(from = "${rootDir}/jacoco.gradle.kts")

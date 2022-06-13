@@ -11,6 +11,7 @@ import MessengerTransport
 
 class ContentViewController: UIViewController {
 
+    private let messengerTransport: MessengerTransport
     private let client: MessagingClient
     private let deployment: Deployment
     let config: Configuration
@@ -22,9 +23,9 @@ class ContentViewController: UIViewController {
         self.deployment = deployment
         self.config = Configuration(deploymentId: deployment.deploymentId!,
                                     domain: deployment.domain!,
-                                    tokenStoreKey: "com.genesys.cloud.messenger",
                                     logging: true)
-        self.client = MobileMessenger().createMessagingClient(configuration: self.config)
+        self.messengerTransport = MobileMessenger(configuration: self.config, "com.genesys.cloud.messenger")
+        self.client = self.messengerTransport.createMessagingClient()
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -312,7 +313,7 @@ extension ContentViewController : UITextFieldDelegate {
                 self.info.text = "<\(error.localizedDescription)>"
             }
         case ("deployment", _):
-            MobileMessenger().fetchDeploymentConfig(domain: deployment.domain!, deploymentId: deployment.deploymentId!, logging: true,
+            messengerTransport.fetchDeploymentConfig(
                 completionHandler: { deploymentConfig, error in
                 if let error = error {
                     self.info.text = "<\(error.localizedDescription)>"
